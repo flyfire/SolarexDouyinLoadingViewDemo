@@ -1,6 +1,7 @@
 package com.solarexsoft.solarexdouyinloadingview;
 
 import android.content.Context;
+import android.support.annotation.Nullable;
 import android.util.AttributeSet;
 import android.view.View;
 
@@ -16,12 +17,12 @@ public class SolarexDouyinLoadingView extends View {
         this(context, null);
     }
 
-    public SolarexDouyinLoadingView(Context context, @androidx.annotation.Nullable AttributeSet
+    public SolarexDouyinLoadingView(Context context, @Nullable AttributeSet
             attrs) {
         this(context, attrs, 0);
     }
 
-    public SolarexDouyinLoadingView(Context context, @androidx.annotation.Nullable AttributeSet
+    public SolarexDouyinLoadingView(Context context, @Nullable AttributeSet
             attrs, int defStyleAttr) {
         super(context, attrs, defStyleAttr);
     }
