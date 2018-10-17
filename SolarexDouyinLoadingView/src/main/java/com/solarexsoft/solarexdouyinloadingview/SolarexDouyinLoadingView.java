@@ -1,8 +1,11 @@
 package com.solarexsoft.solarexdouyinloadingview;
 
+import android.animation.Animator;
+import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.TypedArray;
+import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
@@ -10,6 +13,8 @@ import android.support.annotation.Nullable;
 import android.util.AttributeSet;
 import android.util.TypedValue;
 import android.view.View;
+import android.view.animation.AccelerateDecelerateInterpolator;
+import android.view.animation.LinearInterpolator;
 
 /**
  * <pre>
@@ -56,6 +61,13 @@ public class SolarexDouyinLoadingView extends View {
     boolean isAnimCanceled = false;
     boolean isLtr = true; // true = 【初始左球】当前正【从左往右】移动,false = 【初始左球】当前正【从右往左】移动
 
+    float centerY;
+    float ltrInitRadius, rtlInitRadius;
+    Paint ltrPaint, rtlPaint;
+    float ltrX, rtlX;
+    float ltrBallRadius, rtlBallRadius;
+    int mWidth, mHeight;
+    float scaleFraction;
 
     public SolarexDouyinLoadingView(Context context) {
         this(context, null);
@@ -73,18 +85,227 @@ public class SolarexDouyinLoadingView extends View {
     }
 
     private void init(Context context, AttributeSet attrs) {
-        TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable.SolarexDouyinLoadingView);
+        TypedArray typedArray = context.obtainStyledAttributes(attrs, R.styleable
+                .SolarexDouyinLoadingView);
         if (typedArray != null) {
             radius1 = typedArray.getDimension(R.styleable.SolarexDouyinLoadingView_radius1, RADIUS);
             radius2 = typedArray.getDimension(R.styleable.SolarexDouyinLoadingView_radius2, RADIUS);
-            
+            gap = typedArray.getDimension(R.styleable.SolarexDouyinLoadingView_gap, GAP);
+            rtlScale = typedArray.getFloat(R.styleable.SolarexDouyinLoadingView_rtlScale,
+                    RTL_SCALE);
+            ltrScale = typedArray.getFloat(R.styleable.SolarexDouyinLoadingView_ltrScale,
+                    LTR_SCALE);
+            color1 = typedArray.getColor(R.styleable.SolarexDouyinLoadingView_color1, LEFT_COLOR);
+            color2 = typedArray.getColor(R.styleable.SolarexDouyinLoadingView_color2, RIGHT_COLOR);
+            mixColor = typedArray.getColor(R.styleable.SolarexDouyinLoadingView_mixColor,
+                    MIX_COLOR);
+            duration = typedArray.getInt(R.styleable.SolarexDouyinLoadingView_duration, DURATION);
+            pauseDuration = typedArray.getInt(R.styleable.SolarexDouyinLoadingView_pauseDuration,
+                    PAUSE_DURATION);
+            scaleStartFraction = typedArray.getFloat(R.styleable
+                    .SolarexDouyinLoadingView_scaleStartFraction, SCALE_START_FRACTION);
+            scaleEndFraction = typedArray.getFloat(R.styleable
+                    .SolarexDouyinLoadingView_scaleEndFraction, SCALE_END_FRACTION);
             typedArray.recycle();
         }
 
+        checkAttr();
+
+        distance = gap + radius1 + radius2;
+
+        initDraw();
+
+        initAnim();
+    }
+
+    private void checkAttr() {
+        radius1 = radius1 > 0 ? radius1 : RADIUS;
+        radius2 = radius2 > 0 ? radius2 : RADIUS;
+        gap = gap >= 0 ? gap : GAP;
+        rtlScale = rtlScale >= 0 ? rtlScale : RTL_SCALE;
+        ltrScale = ltrScale >= 0 ? ltrScale : LTR_SCALE;
+        duration = duration > 0 ? duration : DURATION;
+        pauseDuration = pauseDuration >= 0 ? pauseDuration : PAUSE_DURATION;
+        if (scaleStartFraction < 0 || scaleStartFraction > 0.5f) {
+            scaleStartFraction = SCALE_START_FRACTION;
+        }
+        if (scaleEndFraction < 0.5f || scaleEndFraction > 1) {
+            scaleEndFraction = SCALE_END_FRACTION;
+        }
+    }
+
+    private void initDraw() {
+        paint1 = new Paint(Paint.ANTI_ALIAS_FLAG);
+        paint2 = new Paint(Paint.ANTI_ALIAS_FLAG);
+        mixPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        paint1.setColor(color1);
+        paint2.setColor(color2);
+        mixPaint.setColor(mixColor);
+
+        ltrPath = new Path();
+        rtlPath = new Path();
+        mixPath = new Path();
+    }
+
+    private void initAnim() {
+        mFraction = 0.0f;
+
+        stop();
+
+        mAnimator = ValueAnimator.ofFloat(0.0f, 1.0f);
+        mAnimator.setDuration(duration);
+        if (pauseDuration > 0) {
+            mAnimator.setStartDelay(pauseDuration);
+            mAnimator.setInterpolator(new AccelerateDecelerateInterpolator());
+        } else {
+            mAnimator.setRepeatCount(ValueAnimator.INFINITE);
+            mAnimator.setRepeatMode(ValueAnimator.RESTART);
+            mAnimator.setInterpolator(new LinearInterpolator());
+        }
+
+        mAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                mFraction = animation.getAnimatedFraction();
+                invalidate();
+            }
+        });
+        mAnimator.addListener(new AnimatorListenerAdapter() {
+            @Override
+            public void onAnimationCancel(Animator animation) {
+                isAnimCanceled = true;
+            }
+
+            @Override
+            public void onAnimationEnd(Animator animation) {
+                if (!isAnimCanceled) {
+                    mAnimator.start();
+                }
+            }
+
+            @Override
+            public void onAnimationRepeat(Animator animation) {
+                isLtr = !isLtr;
+            }
+
+            @Override
+            public void onAnimationStart(Animator animation) {
+                isLtr = !isLtr;
+            }
+        });
+    }
+
+    /**
+     * 停止动画
+     */
+    public void stop() {
+        if (mAnimator != null) {
+            mAnimator.cancel();
+            mAnimator = null;
+        }
+    }
+
+    public void start() {
+        if (mAnimator == null) {
+            initAnim();
+        }
+        if (mAnimator.isRunning()) {
+            mAnimator.cancel();
+        }
+        post(new Runnable() {
+            @Override
+            public void run() {
+                isAnimCanceled = false;
+                isLtr = false;
+                mAnimator.start();
+            }
+        });
+    }
+
+    @Override
+    protected void onDetachedFromWindow() {
+        stop();
+        super.onDetachedFromWindow();
     }
 
     private float dp2px(float dp) {
         return TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, getResources()
                 .getDisplayMetrics());
+    }
+
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+        int wSize = MeasureSpec.getSize(widthMeasureSpec);
+        int wMode = MeasureSpec.getMode(widthMeasureSpec);
+        int hSize = MeasureSpec.getSize(heightMeasureSpec);
+        int hMode = MeasureSpec.getMode(heightMeasureSpec);
+
+        float maxScale = Math.max(rtlScale, ltrScale);
+        maxScale = Math.max(maxScale, 1);
+
+        if (wMode != MeasureSpec.EXACTLY) {
+            wSize = (int) (gap + (2*radius1 + 2*radius2) * maxScale + dp2px(1));
+        }
+        if (hMode != MeasureSpec.EXACTLY) {
+            hSize = (int) (2 * Math.max(radius1, radius2) * maxScale + dp2px(1));
+        }
+
+        setMeasuredDimension(wSize, hSize);
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        mWidth = w;
+        mHeight = h;
+        centerY = h/2.0f;
+    }
+
+    @Override
+    protected void onDraw(Canvas canvas) {
+        super.onDraw(canvas);
+
+        if (isLtr) {
+            ltrInitRadius = radius1;
+            rtlInitRadius = radius2;
+            ltrPaint = paint1;
+            rtlPaint = paint2;
+        } else {
+            ltrInitRadius = radius2;
+            rtlInitRadius = radius1;
+            ltrPaint = paint2;
+            rtlPaint = paint1;
+        }
+
+        ltrX = mWidth/2.0f - distance/2.0f;
+        ltrX = ltrX + (distance * mFraction);
+
+        rtlX = mWidth/2.0f + distance/2.0f;
+        rtlX = rtlX - (distance * mFraction);
+
+        if (mFraction <= scaleStartFraction) {
+            scaleFraction = 1.0f * mFraction / scaleStartFraction;
+            ltrBallRadius = ltrInitRadius * (1 + (ltrScale - 1) * scaleFraction);
+            rtlBallRadius = rtlInitRadius * (1 + (rtlScale - 1) * scaleFraction);
+        } else if (mFraction >= scaleEndFraction) {
+            scaleFraction = (mFraction - 1) / (scaleEndFraction - 1);
+            ltrBallRadius = ltrInitRadius * (1 + (ltrScale - 1) * scaleFraction);
+            rtlBallRadius = rtlBallRadius * (1 + (rtlScale - 1) * scaleFraction);
+        } else {
+            ltrBallRadius = ltrInitRadius * ltrScale;
+            rtlBallRadius = rtlBallRadius * rtlScale;
+        }
+
+        ltrPath.reset();
+        ltrPath.addCircle(ltrX, centerY, ltrBallRadius, Path.Direction.CW);
+        rtlPath.reset();
+        rtlPath.addCircle(rtlX, centerY, rtlBallRadius, Path.Direction.CW);
+        mixPath.op(ltrPath, rtlPath, Path.Op.INTERSECT);
+
+        canvas.drawPath(ltrPath, ltrPaint);
+        canvas.drawPath(rtlPath, rtlPaint);
+        canvas.drawPath(mixPath, mixPaint);
     }
 }
