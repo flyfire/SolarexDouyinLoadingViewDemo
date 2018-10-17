@@ -285,15 +285,15 @@ public class SolarexDouyinLoadingView extends View {
         rtlX = mWidth/2.0f + distance/2.0f;
         rtlX = rtlX - (distance * mFraction);
 
-        if (mFraction <= scaleStartFraction) {
-            scaleFraction = 1.0f * mFraction / scaleStartFraction;
+        if (mFraction <= scaleStartFraction) { //动画进度[0,scaleStartFraction]时，球大小由1倍逐渐缩放至ltrScale/rtlScale倍
+            scaleFraction = 1.0f * mFraction / scaleStartFraction; //百分比转换 [0,scaleStartFraction]] -> [0,1]
             ltrBallRadius = ltrInitRadius * (1 + (ltrScale - 1) * scaleFraction);
             rtlBallRadius = rtlInitRadius * (1 + (rtlScale - 1) * scaleFraction);
-        } else if (mFraction >= scaleEndFraction) {
-            scaleFraction = (mFraction - 1) / (scaleEndFraction - 1);
+        } else if (mFraction >= scaleEndFraction) { //动画进度[scaleEndFraction,1]，球大小由ltrScale/rtlScale倍逐渐恢复至1倍
+            scaleFraction = (mFraction - 1) / (scaleEndFraction - 1); //百分比转换，[scaleEndFraction,1] -> [1,0]
             ltrBallRadius = ltrInitRadius * (1 + (ltrScale - 1) * scaleFraction);
             rtlBallRadius = rtlBallRadius * (1 + (rtlScale - 1) * scaleFraction);
-        } else {
+        } else { //动画进度[scaleStartFraction,scaleEndFraction]，球保持缩放后的大小
             ltrBallRadius = ltrInitRadius * ltrScale;
             rtlBallRadius = rtlBallRadius * rtlScale;
         }
